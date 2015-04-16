@@ -1,6 +1,8 @@
 // Copyright 1998-2015 Epic Games, Inc. All Rights Reserved.
 
 #include "PrivatePCH.h"
+#include "ISettingsModule.h"
+#include "ISettingsSection.h"
 #include "ModuleInterface.h"
 #include "ModuleManager.h"
 
@@ -19,9 +21,7 @@ class FPhilipsHueModule
 public:
 
 	/** Default constructor. */
-	FPhilipsHueModule()
-		: Initialized(false)
-	{ }
+	FPhilipsHueModule()	{ }
 
 public:
 
@@ -39,23 +39,48 @@ public:
 			return;
 		}
 
-		Initialized = true;
+		// register settings
+		ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings");
+
+		if (SettingsModule != nullptr)
+		{
+			ISettingsSectionPtr SettingsSection = SettingsModule->RegisterSettings("Project", "Plugins", "PhilipsHue",
+				LOCTEXT("PhilipsHueSettingsName", "Philips Hue"),
+				LOCTEXT("PhilipsHueSettingsDescription", "Configure the Philips Hue plug-in."),
+				GetMutableDefault<UPhilipsHueSettings>()
+			);
+
+			if (SettingsSection.IsValid())
+			{
+				SettingsSection->OnModified().BindRaw(this, &FPhilipsHueModule::HandleSettingsSaved);
+			}
+		}
 	}
 
 	virtual void ShutdownModule() override
 	{
-		if (!Initialized)
+		// unregister settings
+		ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings");
+
+		if (SettingsModule != nullptr)
 		{
-			return;
+			SettingsModule->UnregisterSettings("Project", "Plugins", "PhilipsHue");
 		}
 
-		Initialized = false;
+	}
+
+	virtual bool SupportsDynamicReloading() override
+	{
+		return true;
 	}
 
 private:
 
-	/** Whether the module has been initialized. */
-	bool Initialized;
+	/** Callback for when the settings were saved. */
+	bool HandleSettingsSaved()
+	{
+		return true;
+	}
 };
 
 

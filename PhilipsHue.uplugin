@@ -1,7 +1,7 @@
 {
 	"FileVersion" : 3,
 	
-	"FriendlyName" : "Windows Media Foundation Video",
+	"FriendlyName" : "Philips Hue",
 	"Version" : 1,
 	"VersionName" : "1.0",
 	"CreatedBy" : "Gerke Max Preussner",
@@ -9,7 +9,7 @@
 	"DocsURL" : "https://github.com/ue4plugins/PhilipsHue",
 	"EngineVersion" : "4.7.0",
 	"Description" : "Implements an interface to the Philips Hue family of personal wireless lighting devices.",
-	"Category" : "Experimental.PhilipsHue",
+	"Category" : "Gadgets",
 	"EnabledByDefault" : true,
 
 	"Modules" :
@@ -21,5 +21,5 @@
 		}
 	],
 
-	"CanContainContent" : false
+	"CanContainContent" : true
 }

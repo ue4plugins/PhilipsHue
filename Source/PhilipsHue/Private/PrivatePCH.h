@@ -10,6 +10,8 @@
 #include "CoreUObject.h"
 #include "Http.h"
 #include "Json.h"
+#include "JsonStructDeserializerBackend.h"
+#include "StructDeserializer.h"
 
 
 /* Private macros

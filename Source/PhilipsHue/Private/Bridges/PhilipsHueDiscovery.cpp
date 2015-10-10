@@ -1,6 +1,7 @@
 // Copyright 1998-2015 Epic Games, Inc. All Rights Reserved.
 
 #include "PrivatePCH.h"
+#include "PhilipsHueDiscoveryMessages.h"
 
 
 /* UPhilipsHueDiscovery structors
@@ -34,61 +35,56 @@ void UPhilipsHueDiscovery::DiscoverBridges()
 
 void UPhilipsHueDiscovery::ForgetBridges()
 {
-	KnownBridges.Empty();
+	BridgesById.Empty();
 }
 
 
 void UPhilipsHueDiscovery::ProcessHttpResponse(FHttpResponsePtr HttpResponse, bool Succeeded)
 {
-	if (Succeeded)
+	State = EPhilipsHueDiscoveryState::Idle;
+
+	if (!Succeeded)
 	{
-		FString ResponseStr = FString(TEXT("{\"bridges\":")) + HttpResponse->GetContentAsString() + TEXT("}");
-		TSharedRef<TJsonReader<>> JsonReader = TJsonReaderFactory<>::Create(ResponseStr);
+		OnDiscoveryCompleted.Broadcast(EPhilipsHueDiscoveryResult::NoResponse);
+		UE_LOG(LogPhilipsHue, Verbose, TEXT("Failed to get bridge discovery response."));
 
-		TSharedPtr<FJsonObject> JsonObject;
-		{
-			if (!FJsonSerializer::Deserialize(JsonReader, JsonObject) || !JsonObject.IsValid())
-			{
-				return;
-			}
-		}
-
-		TArray<TSharedPtr<FJsonValue>> Bridges = JsonObject->GetArrayField(TEXT("bridges"));
-		{
-			TArray<UPhilipsHueBridge*> DiscoveredBridges;
-
-			for (TArray<TSharedPtr<FJsonValue>>::TConstIterator It(Bridges); It; ++It)
-			{
-				TSharedPtr<FJsonObject> DiscoveredBridge = (*It)->AsObject();
-
-				if (!DiscoveredBridge.IsValid() ||
-					!DiscoveredBridge->HasField(TEXT("id")) ||
-					!DiscoveredBridge->HasField(TEXT("internalipaddress")))
-				{
-					continue;
-				}
-
-				FString DiscoveredId = DiscoveredBridge->GetStringField(TEXT("id"));
-				FString DiscoveredAddr = DiscoveredBridge->GetStringField(TEXT("internalipaddress"));
-
-				for (UPhilipsHueBridge* KnownBridge : KnownBridges)
-				{
-					if (DiscoveredId == KnownBridge->Id)
-					{
-						DiscoveredBridges.Add(KnownBridge);
-					}
-					else
-					{
-						//DiscoveredBridges.Add()
-					}
-				}
-			}
-
-			KnownBridges = DiscoveredBridges;
-		}
+		return;
 	}
 
-	State = EPhilipsHueDiscoveryState::Idle;
+	// deserialize response
+	FString ResponseStr = FString(TEXT("{\"BridgeInfos\":")) + HttpResponse->GetContentAsString() + TEXT("}");
+	FBufferReader ResponseReader((void*)*ResponseStr, ResponseStr.Len() * sizeof(TCHAR), false);
+	FJsonStructDeserializerBackend Backend(ResponseReader);
+	FPhilipsHueDiscoveryResponse Response;
+
+	if (!FStructDeserializer::Deserialize(Response, Backend))
+	{
+		OnDiscoveryCompleted.Broadcast(EPhilipsHueDiscoveryResult::SerializationFailure);
+		UE_LOG(LogPhilipsHue, Verbose, TEXT("Failed to deserialize bridge discovery response."));
+
+		return;
+	}
+
+	// add or update discovered bridge
+	for (const auto& BridgeInfo : Response.BridgeInfos)
+	{
+		if (BridgeInfo.Id.IsEmpty())
+		{
+			continue;;
+		}
+
+		UPhilipsHueBridge*& Bridge = BridgesById.FindOrAdd(BridgeInfo.Id);
+
+		if (Bridge == nullptr)
+		{
+			Bridge = NewObject<UPhilipsHueBridge>(this, NAME_None);
+		}
+
+		Bridge->Id = BridgeInfo.Id;
+		Bridge->Configuration.IpAddress = BridgeInfo.InternalIpAddress;
+	}
+
+	OnDiscoveryCompleted.Broadcast(EPhilipsHueDiscoveryResult::Success);
 }
 
 
@@ -97,6 +93,7 @@ void UPhilipsHueDiscovery::ProcessHttpResponse(FHttpResponsePtr HttpResponse, bo
 
 void UPhilipsHueDiscovery::HandleHttpRequestComplete(FHttpRequestPtr HttpRequest, FHttpResponsePtr HttpResponse, bool bSucceeded)
 {
+	// process response on game thread
 	FFunctionGraphTask::CreateAndDispatchWhenReady([=]() {
 		ProcessHttpResponse(HttpResponse, bSucceeded);
 	}, TStatId(), nullptr, ENamedThreads::GameThread);

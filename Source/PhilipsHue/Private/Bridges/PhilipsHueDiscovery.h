@@ -6,7 +6,21 @@
 #include "PhilipsHueDiscovery.generated.h"
 
 
-UENUM()
+UENUM(BlueprintType)
+enum class EPhilipsHueDiscoveryResult : uint8
+{
+	/** Bridge discovery succeeded. */
+	Success,
+
+	/** Failed to get response. */
+	NoResponse,
+
+	/** Failed to serialize response. */
+	SerializationFailure
+};
+
+
+UENUM(BlueprintType)
 enum class EPhilipsHueDiscoveryState : uint8
 {
 	/** No discovery in progress. */
@@ -18,6 +32,10 @@ enum class EPhilipsHueDiscoveryState : uint8
 	/** Discovery using UPNP in progress. */
 	Upnp,
 };
+
+
+/** Multicast delegate that is invoked when bridge discovery has finished. */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPhilipsHueDiscoveryCompleted, EPhilipsHueDiscoveryResult, Result);
 
 
 /**
@@ -46,6 +64,12 @@ public:
 		return State;
 	}
 
+public:
+
+	/** A delegate that is invoked when bridge discovery finished. */
+	UPROPERTY(BlueprintAssignable, Category="PhilipsHue|Discover")
+	FOnPhilipsHueDiscoveryCompleted OnDiscoveryCompleted;
+
 protected:
 
 	/**
@@ -63,10 +87,10 @@ private:
 private:
 
 	/** Collection of discovered bridges. */
-	UPROPERTY()
-	TArray<UPhilipsHueBridge*> KnownBridges;
+	UPROPERTY(transient)
+	TMap<FString, UPhilipsHueBridge*> BridgesById;
 
 	/** Current discovery state. */
-	UPROPERTY()
+	UPROPERTY(transient)
 	EPhilipsHueDiscoveryState State;
 };
